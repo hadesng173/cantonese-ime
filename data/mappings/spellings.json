@@ -2795,6 +2795,19 @@
     {
       "canonical": "cyun",
       "derivation": [
+        "casual.chuen_cyun"
+      ],
+      "kind": "project_alias",
+      "penalty": 0.45,
+      "rule_id": "casual.chuen_cyun",
+      "source": [
+        "project_policy"
+      ],
+      "spelling": "chuen"
+    },
+    {
+      "canonical": "cyun",
+      "derivation": [
         "onset.c_to_ch"
       ],
       "kind": "orthographic_alias",
@@ -8129,6 +8142,19 @@
         "project_policy"
       ],
       "spelling": "jyun"
+    },
+    {
+      "canonical": "jyun",
+      "derivation": [
+        "casual.yuen_jyun"
+      ],
+      "kind": "project_alias",
+      "penalty": 0.45,
+      "rule_id": "casual.yuen_jyun",
+      "source": [
+        "project_policy"
+      ],
+      "spelling": "yuen"
     },
     {
       "canonical": "jyun",
@@ -15458,6 +15484,19 @@
       "spelling": "syun"
     },
     {
+      "canonical": "syun",
+      "derivation": [
+        "casual.suen_syun"
+      ],
+      "kind": "project_alias",
+      "penalty": 0.45,
+      "rule_id": "casual.suen_syun",
+      "source": [
+        "project_policy"
+      ],
+      "spelling": "suen"
+    },
+    {
       "canonical": "syut",
       "derivation": [],
       "kind": "canonical",
@@ -16235,6 +16274,19 @@
         "project_policy"
       ],
       "spelling": "tyun"
+    },
+    {
+      "canonical": "tyun",
+      "derivation": [
+        "casual.tuen_tyun"
+      ],
+      "kind": "project_alias",
+      "penalty": 0.45,
+      "rule_id": "casual.tuen_tyun",
+      "source": [
+        "project_policy"
+      ],
+      "spelling": "tuen"
     },
     {
       "canonical": "tyut",
@@ -18885,6 +18937,19 @@
     {
       "canonical": "zyun",
       "derivation": [
+        "casual.juen_zyun"
+      ],
+      "kind": "project_alias",
+      "penalty": 0.45,
+      "rule_id": "casual.juen_zyun",
+      "source": [
+        "project_policy"
+      ],
+      "spelling": "juen"
+    },
+    {
+      "canonical": "zyun",
+      "derivation": [
         "onset.z_to_j"
       ],
       "kind": "orthographic_alias",
@@ -18923,10 +18988,10 @@
   "counts": {
     "ambiguous_spellings": 298,
     "canonical_bases": 878,
-    "distinct_spellings": 1170,
+    "distinct_spellings": 1175,
     "identity_records": 878,
-    "nonidentity_records": 642,
-    "records": 1520
+    "nonidentity_records": 647,
+    "records": 1525
   },
   "policy": {
     "ambiguity_policy": "Keep one best derivation per spelling/canonical pair; retain different canonical readings for the same spelling.",
@@ -19350,6 +19415,71 @@
         "cantoneseinput_examples",
         "project_policy"
       ]
+    },
+    {
+      "evidence": "Narrow exception; not recursively rewritten.",
+      "family": "explicit",
+      "kind": "project_alias",
+      "operation": "explicit",
+      "original": "zyun",
+      "penalty": 0.45,
+      "replacement": "juen",
+      "rule_id": "casual.juen_zyun",
+      "source": [
+        "project_policy"
+      ]
+    },
+    {
+      "evidence": "Narrow exception; not recursively rewritten.",
+      "family": "explicit",
+      "kind": "project_alias",
+      "operation": "explicit",
+      "original": "cyun",
+      "penalty": 0.45,
+      "replacement": "chuen",
+      "rule_id": "casual.chuen_cyun",
+      "source": [
+        "project_policy"
+      ]
+    },
+    {
+      "evidence": "Narrow exception; not recursively rewritten.",
+      "family": "explicit",
+      "kind": "project_alias",
+      "operation": "explicit",
+      "original": "syun",
+      "penalty": 0.45,
+      "replacement": "suen",
+      "rule_id": "casual.suen_syun",
+      "source": [
+        "project_policy"
+      ]
+    },
+    {
+      "evidence": "Narrow exception; not recursively rewritten.",
+      "family": "explicit",
+      "kind": "project_alias",
+      "operation": "explicit",
+      "original": "jyun",
+      "penalty": 0.45,
+      "replacement": "yuen",
+      "rule_id": "casual.yuen_jyun",
+      "source": [
+        "project_policy"
+      ]
+    },
+    {
+      "evidence": "Narrow exception; not recursively rewritten.",
+      "family": "explicit",
+      "kind": "project_alias",
+      "operation": "explicit",
+      "original": "tyun",
+      "penalty": 0.45,
+      "replacement": "tuen",
+      "rule_id": "casual.tuen_tyun",
+      "source": [
+        "project_policy"
+      ]
     }
   ],
   "schema_version": 3,
@@ -19643,7 +19773,7 @@
       }
     },
     "database": {
-      "path": ".local/final-source-canonical/first/lexicon.sqlite3",
+      "path": "data/generated/lexicon.sqlite3",
       "schema_version": 2,
       "sha256": "bd312406a15162556ac58a257ede1514ad40890c793b6f8fa05084fda2d6241a"
     },
@@ -19684,7 +19814,7 @@
       "cccanto": "f28a9af8e121b2ca7324cc5ec5605ff0839d393180a4af80ec815accf63bd2e1",
       "cccedict_headwords": "2cff217728fa044fc1d5e07906dce8ad53fc9eeb151437583bad6a8f3961a6d9",
       "dictionary": "40e30a4eef4582a9a921c9dba19a544e7b8af55f712c7b12f8a16124544ac9cd",
-      "mappings": "d61d6e7ab3b82bab7a31d42f7abfefb4f224eed5c9dbf505304eef2d940249e1",
+      "mappings": "7c32e530e9f3b61f10ea061432b834827ba6b318fda64d47e15e81a25a08ad13",
       "typeduck": "a8ea69a376eb610472b7d5036da20c8566feccdff89972a39db3ad355c797b36",
       "unihan": "2610a574dc259bb37f7dc100f116904bf74ea01794042640cee5b84d047d135a",
       "wordnet": "8ecc02e5c989a48c8e17c3f2cc922f534f73b0cef94d54347f0701031952b087",

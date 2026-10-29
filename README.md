@@ -14,14 +14,15 @@ published binary release is for Windows x64.
 
 ## Install
 
-Use [the Windows x64 installer](https://github.com/hadesng173/cantonese-ime/releases/download/v1.0.8/CantoneseIME-1.0.8-windows-x64-setup.exe)
-and [its SHA-256 checksums](https://github.com/hadesng173/cantonese-ime/releases/download/v1.0.8/SHA256SUMS.txt)
-from [release 1.0.8](https://github.com/hadesng173/cantonese-ime/releases/tag/v1.0.8).
-Version 1.0.8 is published at the maintainer's request with known long-phrase
-limitations. The [expanded review](docs/LONG_PHRASE_RELEASE_REVIEW.md) found
-66/89 ordinary phrase targets in the first nine choices; the sentence-quality
-gates remain failed. See the [publication scope](docs/RELEASE_PUBLICATION_1.0.8.md)
-for validation limits and the ongoing engine-improvement work.
+Use [the Windows x64 installer](https://github.com/hadesng173/cantonese-ime/releases/download/v1.0.9/CantoneseIME-1.0.9-windows-x64-setup.exe)
+and [its SHA-256 checksums](https://github.com/hadesng173/cantonese-ime/releases/download/v1.0.9/SHA256SUMS.txt)
+from [release 1.0.9](https://github.com/hadesng173/cantonese-ime/releases/tag/v1.0.9).
+See [what changed and the validation limits](docs/RELEASE_NOTES_1.0.9.md).
+Long-phrase ranking remains limited. The historical 1.0.8
+[expanded review](docs/LONG_PHRASE_RELEASE_REVIEW.md) found 66/89 ordinary phrase
+targets in the first nine choices and failed its sentence-quality gates. Those
+results and the [1.0.8 publication scope](docs/RELEASE_PUBLICATION_1.0.8.md) remain
+unchanged; 1.0.9 makes no new sentence-accuracy claim.
 Run Setup normally and approve Windows' administrator prompt. The installer
 includes its own private Python runtime; no system Python, developer tools,
 or Internet connection is required on the target computer.
@@ -99,7 +100,7 @@ typing a digit.
 
 ## Candidate appearance
 
-Version 1.0.8 uses **LXGW WenKai TC Regular (霞鶩文楷 TC)** for the numbered
+Version 1.0.9 uses **LXGW WenKai TC Regular (霞鶩文楷 TC)** for the numbered
 word choices, at 20 logical pixels with Windows DPI scaling. The installer
 includes the unmodified font; no separate Windows font installation is needed.
 It is loaded privately for the IME's candidate panel. The receiving application
@@ -135,11 +136,14 @@ opens, and choices made from the right-click menu keep these lines. Sandboxed
 (AppContainer) applications cannot read the file and use the defaults.
 
 The package is unsigned. Windows may display an unknown-publisher or SmartScreen
-warning. Support is scoped to native 64-bit desktop applications on Windows x64;
+warning. The release targets native 64-bit applications on Windows x64 and adds
+AppContainer compatibility code. User acceptance in sandboxed applications,
+clean installation and live game clients remains unverified for this release.
 32-bit applications, ARM64 and secure/password fields are outside this release.
-Validation and remaining platform checks are recorded in
-[the 1.0.8 release notes](docs/RELEASE_NOTES_1.0.8.md) and
-[verification record](docs/release-1.0.8-validation.json). The
+Current changes and validation limits are recorded in
+[the 1.0.9 release notes](docs/RELEASE_NOTES_1.0.9.md).
+The [1.0.8 release notes](docs/RELEASE_NOTES_1.0.8.md) and
+[verification record](docs/release-1.0.8-validation.json) retain historical evidence. The
 [first public release summary](docs/GITHUB_RELEASE_1.0.5.md) retains the
 historical 1.0.5 checks.
 
@@ -155,7 +159,7 @@ python tools/build_release.py --fetch-tools
 ```
 
 The build pins official application-local Python and Inno Setup downloads and
-stages the release under `dist/CantoneseIME-1.0.8-x64`. It verifies source,
+stages the release under `dist/CantoneseIME-1.0.9-x64`. It verifies source,
 dictionary, runtime and attribution files before compiling the single setup
 executable. Running the builder does not install the resulting IME.
 The native sources, toolchain lock and build scripts are in [native/](native/tsf/README.md)

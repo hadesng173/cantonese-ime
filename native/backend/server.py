@@ -38,6 +38,10 @@ ERROR_PIPE_CONNECTED = 535
 WAIT_OBJECT_0 = 0
 WAIT_TIMEOUT = 258
 WAIT_FAILED = 0xFFFFFFFF
+TOKEN_QUERY = 0x0008
+TOKEN_USER = 1
+TOKEN_SESSION_ID = 12
+ERROR_INSUFFICIENT_BUFFER = 122
 
 
 def pipe_security_sddl(sid: str) -> str:
@@ -46,7 +50,9 @@ def pipe_security_sddl(sid: str) -> str:
     AppContainer (ALL APPLICATION PACKAGES / ALL RESTRICTED APPLICATION
     PACKAGES) hosts run with the same user SID but need their own ACE, and a
     low mandatory label lets their low-integrity token write. No Everyone or
-    anonymous ACE; remote clients stay rejected by the pipe mode.
+    anonymous ACE; remote clients stay rejected by the pipe mode. Package
+    ACEs can admit another user's package, so every message is separately
+    authenticated against the broker's user SID and Windows session.
     """
     return (f"D:P(A;;GA;;;SY)(A;;GA;;;{sid})(A;;GRGW;;;AC)(A;;GRGW;;;S-1-15-2-2)"
             "S:(ML;;NW;;;LW)")
@@ -144,6 +150,8 @@ class Win32:
         self.advapi = ctypes.WinDLL("advapi32", use_last_error=True)
         self.kernel.GetCurrentProcess.restype = w.HANDLE
         self.kernel.GetCurrentProcess.argtypes = []
+        self.kernel.GetCurrentThread.restype = w.HANDLE
+        self.kernel.GetCurrentThread.argtypes = []
         self.kernel.GetCurrentProcessId.restype = w.DWORD
         self.kernel.GetCurrentProcessId.argtypes = []
         self.kernel.ProcessIdToSessionId.argtypes = [w.DWORD, ctypes.POINTER(w.DWORD)]
@@ -154,6 +162,12 @@ class Win32:
         self.kernel.LocalFree.restype = w.HLOCAL
         self.advapi.OpenProcessToken.argtypes = [w.HANDLE, w.DWORD, ctypes.POINTER(w.HANDLE)]
         self.advapi.OpenProcessToken.restype = w.BOOL
+        self.advapi.ImpersonateNamedPipeClient.argtypes = [w.HANDLE]
+        self.advapi.ImpersonateNamedPipeClient.restype = w.BOOL
+        self.advapi.OpenThreadToken.argtypes = [w.HANDLE, w.DWORD, w.BOOL, ctypes.POINTER(w.HANDLE)]
+        self.advapi.OpenThreadToken.restype = w.BOOL
+        self.advapi.RevertToSelf.argtypes = []
+        self.advapi.RevertToSelf.restype = w.BOOL
         self.advapi.GetTokenInformation.argtypes = [w.HANDLE, ctypes.c_int, w.LPVOID, w.DWORD, ctypes.POINTER(w.DWORD)]
         self.advapi.GetTokenInformation.restype = w.BOOL
         self.advapi.ConvertSidToStringSidW.argtypes = [w.LPVOID, ctypes.POINTER(w.LPWSTR)]
@@ -184,31 +198,66 @@ class Win32:
             raise _win_error(_last_error())
         return value
 
+    def _token_identity(self, token) -> tuple[str, int]:
+        length = w.DWORD()
+        first = self.advapi.GetTokenInformation(token, TOKEN_USER, None, 0, ctypes.byref(length))
+        code = _last_error() if not first else 0
+        if not first and code != ERROR_INSUFFICIENT_BUFFER:
+            raise _win_error(code)
+        if not ctypes.sizeof(SidAndAttributes) <= length.value <= 65_536:
+            raise ValueError("Token user information has an invalid size.")
+        information = ctypes.create_string_buffer(length.value)
+        self.checked(self.advapi.GetTokenInformation(
+            token, TOKEN_USER, information, len(information), ctypes.byref(length)))
+        sid = ctypes.cast(information, ctypes.POINTER(SidAndAttributes)).contents.Sid
+        sid_string = w.LPWSTR()
+        self.checked(self.advapi.ConvertSidToStringSidW(sid, ctypes.byref(sid_string)))
+        try:
+            user_sid = sid_string.value
+        finally:
+            if self.kernel.LocalFree(ctypes.cast(sid_string, w.HLOCAL)):
+                raise _win_error(_last_error())
+        if not user_sid:
+            raise ValueError("Token user SID is empty.")
+        session = w.DWORD()
+        self.checked(self.advapi.GetTokenInformation(
+            token, TOKEN_SESSION_ID, ctypes.byref(session), ctypes.sizeof(session), ctypes.byref(length)))
+        if length.value != ctypes.sizeof(session):
+            raise ValueError("Token session information has an invalid size.")
+        return user_sid, session.value
+
     def identity(self) -> tuple[str, int]:
         token = w.HANDLE()
-        self.checked(self.advapi.OpenProcessToken(self.kernel.GetCurrentProcess(), 0x0008, ctypes.byref(token)))
+        self.checked(self.advapi.OpenProcessToken(
+            self.kernel.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)))
         try:
-            length = w.DWORD()
-            first = self.advapi.GetTokenInformation(token, 1, None, 0, ctypes.byref(length))
-            code = _last_error() if not first else 0
-            if not first and code != 122:  # ERROR_INSUFFICIENT_BUFFER is the expected size query.
-                raise _win_error(code)
-            if not length.value:
-                raise ValueError("Token information has no size.")
-            information = ctypes.create_string_buffer(length.value)
-            self.checked(self.advapi.GetTokenInformation(token, 1, information, length.value, ctypes.byref(length)))
-            sid = ctypes.cast(information, ctypes.POINTER(SidAndAttributes)).contents.Sid
-            sid_string = w.LPWSTR()
-            self.checked(self.advapi.ConvertSidToStringSidW(sid, ctypes.byref(sid_string)))
-            try:
-                user_sid = sid_string.value
-            finally:
-                self.kernel.LocalFree(ctypes.cast(sid_string, w.HLOCAL))
+            return self._token_identity(token)
         finally:
-            self.kernel.CloseHandle(token)
-        session = w.DWORD()
-        self.checked(self.kernel.ProcessIdToSessionId(self.kernel.GetCurrentProcessId(), ctypes.byref(session)))
-        return user_sid, session.value
+            self.checked(self.kernel.CloseHandle(token))
+
+    def authenticate_client(self, handle, expected_identity: tuple[str, int]):
+        """Check the last message's token, then revert before any dispatch/I/O.
+
+        OpenAsSelf permits querying an identification-level AppContainer token;
+        no engine, file or logging operation runs under the client's identity.
+        A failed reversion makes the process unsafe, so exit without cleanup.
+        """
+        self.checked(self.advapi.ImpersonateNamedPipeClient(handle))
+        token = w.HANDLE()
+        try:
+            self.checked(self.advapi.OpenThreadToken(
+                self.kernel.GetCurrentThread(), TOKEN_QUERY, True, ctypes.byref(token)))
+            if not token.value:
+                raise ValueError("Client token handle is empty.")
+            client_identity = self._token_identity(token)
+        finally:
+            if not self.advapi.RevertToSelf():
+                os._exit(1)
+                raise SystemExit(1)  # Defensive only: os._exit never returns.
+            if token.value:
+                self.checked(self.kernel.CloseHandle(token))
+        if client_identity != expected_identity:
+            raise PermissionError("Pipe client user or session does not match the broker.")
 
     def security(self, sid: str):
         descriptor = w.LPVOID()
@@ -317,7 +366,8 @@ def write_json(path: Path, value: dict):
     os.replace(temporary, path)
 
 
-def _run_pool(api, handles: list, engine, stop: threading.Event, log, publish_ready, predictions=None):
+def _run_pool(api, handles: list, engine, stop: threading.Event, log, publish_ready, predictions=None,
+              *, expected_identity: tuple[str, int] | None = None):
     """Reuse a fixed pipe pool; never allocate instance17 after client16.
 
     Handles stay owned by serve(), workers own only their in-flight operations.
@@ -326,6 +376,8 @@ def _run_pool(api, handles: list, engine, stop: threading.Event, log, publish_re
     workers = []
     failures: list[Exception] = []
     failure_lock = threading.Lock()
+    if expected_identity is None:
+        expected_identity = api.identity()
 
     def raise_worker_failure():
         if failures:
@@ -345,6 +397,9 @@ def _run_pool(api, handles: list, engine, stop: threading.Event, log, publish_re
                     while not stop.is_set():
                         length = decode_frame_length(api.read_exact(handle, 4, stop))
                         payload = api.read_exact(handle, length, stop)
+                        # Impersonation identifies the token of this message,
+                        # including a client that changed identity after connect.
+                        api.authenticate_client(handle, expected_identity)
                         response = (dispatch(engine, payload) if predictions is None
                                     else dispatch(engine, payload, predictions))
                         api.write_all(handle, frame(encode_response(response)), stop)
@@ -469,6 +524,7 @@ def serve(database: Path, ready_file: Path, log_file: Path, *,
                     "learning_enabled": getattr(engine, "learning_path", None) is not None,
                     "learning_file": str(learning_file.resolve()) if learning_file is not None else None,
                     "remote_clients": "rejected", "pipe_acl": "current user and SYSTEM; app packages read/write; low label",
+                    "client_authentication": "every message: token user SID and Windows session must match broker",
                     "max_pipe_instances": MAX_PIPE_INSTANCES,
                     "io_timeout_seconds": IO_TIMEOUT_SECONDS,
                     "diagnostic_logging": "bounded asynchronous queue; dropped-record count on shutdown",
@@ -492,7 +548,8 @@ def serve(database: Path, ready_file: Path, log_file: Path, *,
                 predictions = PredictionStore(prediction_file) if prediction_file is not None else None
                 try:
                     extra = (predictions,) if predictions is not None else ()
-                    _run_pool(api, handles, engine, stop, log, publish_ready, *extra)
+                    _run_pool(api, handles, engine, stop, log, publish_ready, *extra,
+                              expected_identity=(sid, session_id))
                 finally:
                     if predictions is not None:
                         predictions.save(force=True)

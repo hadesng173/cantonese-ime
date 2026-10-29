@@ -137,8 +137,7 @@ class PredictionStore:
         if len(self._pairs) > MAX_CONTEXTS:
             # Forget the context with the least total evidence.
             weakest = min(self._pairs, key=lambda key: (sum(self._pairs[key].values()), key))
-            if weakest != context:
-                del self._pairs[weakest]
+            del self._pairs[weakest]
 
     def record(self, previous: str, following: str) -> None:
         """Count one occurrence of `following` typed right after `previous`."""

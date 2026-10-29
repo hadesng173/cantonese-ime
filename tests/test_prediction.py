@@ -89,6 +89,25 @@ class PredictionStoreTests(unittest.TestCase):
                 store.record(chr(0x5000 + index), "好")
             self.assertLessEqual(len(store._pairs), 3)
 
+    def test_context_limit_holds_for_descending_equal_weight_contexts(self) -> None:
+        store = self.store()
+        contexts = [chr(0x5005 - index) for index in range(6)]
+        with mock.patch.object(prediction, "MAX_CONTEXTS", 3):
+            for index, context in enumerate(contexts):
+                with self.subTest(context=context):
+                    store.record(context, "x")
+                    expected = set(sorted(contexts[:index + 1], reverse=True)[:3])
+                    self.assertLessEqual(len(store._pairs), prediction.MAX_CONTEXTS)
+                    self.assertEqual(set(store._pairs), expected)
+                    store.save(force=True)
+                    saved = json.loads(self.path.read_text(encoding="utf-8"))["pairs"]
+                    self.assertLessEqual(len(saved), prediction.MAX_CONTEXTS)
+                    self.assertEqual(saved, store._pairs)
+                    restored = self.store()
+                    self.assertLessEqual(len(restored._pairs), prediction.MAX_CONTEXTS)
+                    self.assertEqual(restored._pairs, saved)
+                    store = restored
+
     def test_no_path_means_memory_only(self) -> None:
         store = PredictionStore(None)
         store.record("我", "哋")
