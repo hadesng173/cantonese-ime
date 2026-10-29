@@ -1,8 +1,8 @@
 {
   "build_script_sha256": "d1e3f8d879565844206d9753e344f75acab2064ad3c4e931d11e0da5f6a9c8e0",
   "files": {
-    "spellings.json": "6726e07ec0751d8a2017d25eb494c416555c0bc70d744155e48cdd1b513abb60",
-    "syllables.json": "6ba71ec3b02e763be7f371b0c354945075bb974092454aaba4725d750b03ef02"
+    "spellings.json": "7bd6928ed01bbc47667e465b23907cc6c48754e0f0443bc89d9f33305b017f37",
+    "syllables.json": "900c8afae2b30f7c827cc820199c4bdae0251e12f1f66d5d51c6cd841ca8219a"
   },
   "inventory_counts": {
     "additional_dictionary_bases": 133,
@@ -34,12 +34,12 @@
   "mapping_counts": {
     "ambiguous_spellings": 298,
     "canonical_bases": 878,
-    "distinct_spellings": 1170,
+    "distinct_spellings": 1175,
     "identity_records": 878,
-    "nonidentity_records": 642,
-    "records": 1520
+    "nonidentity_records": 647,
+    "records": 1525
   },
-  "module_sha256": "d61d6e7ab3b82bab7a31d42f7abfefb4f224eed5c9dbf505304eef2d940249e1",
+  "module_sha256": "7c32e530e9f3b61f10ea061432b834827ba6b318fda64d47e15e81a25a08ad13",
   "profile_version": "cantonese-yale-ascii-v3",
   "schema_version": 3
 }

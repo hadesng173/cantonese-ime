@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cantonese-ime"
-version = "1.0.8"
+version = "1.0.9"
 description = "Offline Cantonese input method for Windows x64"
 requires-python = ">=3.11"
 dependencies = []

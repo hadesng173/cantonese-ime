@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "version": "1.0.9",
+  "checked_at_utc": "2026-10-29T12:52:18.203605+00:00",
+  "source_base_commit": "d99324f3aa968340cc06e46eea6e963b5afa66ea",
+  "source_scope": "Latest merged main plus version metadata, regenerated mappings, prediction-bound fix and per-message broker authentication.",
+  "architecture": "AMD64/x64",
+  "signed": false,
+  "setup": {
+    "filename": "CantoneseIME-1.0.9-windows-x64-setup.exe",
+    "bytes": 91990022,
+    "sha256": "74a32a2ccdebc134a30e8ea135ae13d5cc789b2da72b9b59b6ca25b224553559"
+  },
+  "package_manifest_sha256": "7e6a1c8d99f7e766cc8c2c2e41b5db6db804e9dad3238e78212667ec06474c4a",
+  "payload_file_count": 132,
+  "dictionary_sha256": "bd312406a15162556ac58a257ede1514ad40890c793b6f8fa05084fda2d6241a",
+  "python_tests": {
+    "passed": true,
+    "run": 722,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 685.047,
+    "skipped_cases": [
+      "test_real_new_helper_resource_mapping_is_retired_before_rollback_copy (test_release_installer.LifecycleTests.test_real_new_helper_resource_mapping_is_retired_before_rollback_copy) ... skipped 'The Windows resource-only helper prototype is unavailable.'",
+      "test_real_resource_mapped_helper_cancel_before_copy_restores_both_modules (test_release_installer.LifecycleTests.test_real_resource_mapped_helper_cancel_before_copy_restores_both_modules) ... skipped 'The Windows resource-only helper prototype is unavailable.'",
+      "test_actual_inno_returns_nonzero_for_failed_machine_or_user_phases_and_captures_diagnostics (test_windows_release_builder.InnoOutcomeTests.test_actual_inno_returns_nonzero_for_failed_machine_or_user_phases_and_captures_diagnostics) ... skipped 'Project-local Inno compiler is not available.'"
+    ],
+    "log_sha256": "ff8bae1fc61e33d431cabaf99d2136cc311ccb5f02a5ad6a578a21a2d8cf269b"
+  },
+  "packaged_runtime": {
+    "passed": true,
+    "checks": 16,
+    "bits": 64,
+    "python_version": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+    "payload_files_verified": 132,
+    "report_sha256": "182c22cc1aff5384692d26ba4e9bf98aa4386c157249e55371a35e559d45f514"
+  },
+  "native_checks": {
+    "passed": true,
+    "source_pin_count": 56,
+    "report_sha256": "2e2f476d19ac291cb67f2954fa689ff857913de74bc730907cb0c820ea049ac0",
+    "suites": [
+      "settings model",
+      "candidate appearance",
+      "input mode button and exact DLL load",
+      "category inventory",
+      "profile icon",
+      "candidate geometry",
+      "18 registration dry-run guards"
+    ]
+  },
+  "real_windows_authentication_probe": {
+    "passed": true,
+    "cases": 3,
+    "scope": "Current desktop token using native identification flags; expected SID/session mismatch denial and token reversion.",
+    "report_sha256": "0e629d61fd511599cdb66f79ac23aaa8a6a98d58a4ba12b033b03d9dc2195eeb",
+    "actual_appcontainer_or_cross_user_token": false
+  },
+  "source_sha256": {
+    "pyproject.toml": "0bce8a886db41b0874be5505774ccb988f3a5fa89f978175d5bc6a449fb2e1c9",
+    "native/tsf/resource.h": "945d7a18ef832cc70dfc17050f3f2e330f5a3b09de118af0b2e5e366af090878",
+    "cantonese_ime/engine.py": "28cd52acd364dea1ea20e1234b64ca856035a68f937797731d83f8be949f7746",
+    "cantonese_ime/mappings.py": "7c32e530e9f3b61f10ea061432b834827ba6b318fda64d47e15e81a25a08ad13",
+    "cantonese_ime/custom.py": "47dbc1480e74851c5f6778ff6e2f68e00a06179e85331dea9a799f6c6f96e7ca",
+    "cantonese_ime/reverse.py": "6a5a1f2419056f35c7e6dfc94d7ad6704399d23f43360c0af093de769be841cf",
+    "cantonese_ime/prediction.py": "f40cb6b95a9af4ce6b435d0b472b85e78c49ff0d2abca79e508ccc8d1d2e3333",
+    "native/backend/server.py": "d48e88d870b49d40e1ccd1adb0aaa3ca13cc5648c2b7d36be583c892f1b7f28b",
+    "native/tsf/ipc.cpp": "7fc2962681a8c85ce7ca4a4c399fa0cb50ba4b38c4c5eae763e7d27b4688550f",
+    "native/tsf/tsf.cpp": "6e3d208573e5d0b88fa34caba05238b559ecef7af5fae529acb05d04ec0950b2",
+    "native/settings/settings.cpp": "c7c9dc4d9d62ad2bf273412f81450c92a817d76fced0917706803fec5fbabd2b",
+    "tools/package_native.py": "69841a4b2a4e1a30dba8a63dde0c9212b8afbc952397c4be0d502e302b065bbd",
+    "tools/build_release.py": "4f4cef29484598c09173bfa37e52bfdaa9e4cdd0dca8e60ceb4a95b189499d19",
+    "data/mappings/build.manifest.json": "9e9892d7414901803fbbe24d6f06545af4da5d8b246fd8325c2626543bd470d6",
+    "data/mappings/spellings.json": "7bd6928ed01bbc47667e465b23907cc6c48754e0f0443bc89d9f33305b017f37",
+    "data/mappings/syllables.json": "900c8afae2b30f7c827cc820199c4bdae0251e12f1f66d5d51c6cd841ca8219a"
+  },
+  "installation_performed": false,
+  "installed_broker_controlled": false,
+  "personal_data_accessed": false,
+  "limitations": [
+    "Known long-sentence ranking limits remain; no new general accuracy or latency claim.",
+    "Clean installation, installed TSF typing, live games and Windows 11 acceptance were not performed for this cut.",
+    "Actual AppContainer, low-integrity, cross-user and cross-session client acceptance remains unverified.",
+    "Unmerged horizontal/vertical layout and experimental contextual ranking are not included.",
+    "No macOS binary; native macOS validation remains pending."
+  ]
+}

@@ -68,6 +68,9 @@ class FakeApi:
     def identity(self):
         return "S-1-5-21-test", 7
 
+    def authenticate_client(self, handle, expected_identity):
+        assert expected_identity == self.identity()
+
     def security(self, sid):
         return "descriptor", "attributes"
 
@@ -152,7 +155,7 @@ class RuntimeStopTests(unittest.TestCase):
             engine.learning_path = learning_path
             return engine
 
-        def pool(_api, _handles, _engine, stop, _log, publish):
+        def pool(_api, _handles, _engine, stop, _log, publish, **_kwargs):
             publish()
             snapshots.append(json.loads(ready.read_text(encoding="utf-8")))
             stop.set()
@@ -186,7 +189,7 @@ class RuntimeStopTests(unittest.TestCase):
         instance = str(uuid.uuid4())
         seen = []
 
-        def pool(_api, _handles, _engine, stop, _log, publish):
+        def pool(_api, _handles, _engine, stop, _log, publish, **_kwargs):
             publish()
             seen.append(json.loads(ready.read_text(encoding="utf-8"))["runtime_instance"])
             server.write_json(stop_file, {"pid": server.os.getpid(), "runtime_instance": instance})
@@ -246,7 +249,7 @@ class PoolLifecycleTests(unittest.TestCase):
         self.assertLess(api.kernel.calls.index(("engine_closed", None)), close_index)
         self.assertEqual(api.kernel.calls[-1], ("free_security", "descriptor"))
 
-    def test_pipe_security_admits_sandboxed_same_user_clients_only(self):
+    def test_pipe_security_allows_sandboxed_access_pending_message_authentication(self):
         sddl = server.pipe_security_sddl("S-1-5-21-1-2-3-1001")
         dacl, sacl = sddl.split("S:")
         self.assertTrue(dacl.startswith("D:P"))  # protected: no inherited ACEs
