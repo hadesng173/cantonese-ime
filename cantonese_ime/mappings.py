@@ -210,6 +210,15 @@ RULES = (
     SpellingRule("vowel.aau_to_ao", "suffix", "aau", "ao", 0.4, "heuristic_alias", "vowel", ("google_examples", "project_policy"), "Inferred from bao in Google's chasiubao example; generalized only within one canonical syllable."),
     SpellingRule("vowel.eo_to_oe", "contains", "eo", "oe", 0.3, "heuristic_alias", "vowel", ("rime_schema", "project_policy"), "Input spelling tolerance; not a claim that distinct Jyutping finals are identical."),
     SpellingRule("vowel.oe_to_eo", "contains", "oe", "eo", 0.3, "heuristic_alias", "vowel", ("rime_schema", "project_policy"), "Input spelling tolerance; strict mode keeps eo and oe distinct."),
+    SpellingRule("onset.s_to_sh", "onset", "s", "sh", 0.45, "orthographic_alias", "onset", ("project_policy",), "Hong Kong romanization of the s onset, as in Shing, Shek and Shun; sh is not a Jyutping onset."),
+    SpellingRule("vowel.eoi_to_ui", "suffix", "eoi", "ui", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong casual spelling of the eoi final (sui, chui, lui, gui); generalizes the explicit sui/hui/kui aliases. Real ui syllables keep their exact readings."),
+    SpellingRule("vowel.eon_to_un", "suffix", "eon", "un", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong casual spelling of the eon final (chun, lun, shun); no Jyutping un syllable takes these onsets."),
+    SpellingRule("vowel.eot_to_ut", "suffix", "eot", "ut", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong casual spelling of the eot final (chut, lut)."),
+    SpellingRule("onset.z_to_ch", "onset", "z", "ch", 0.8, "orthographic_alias", "onset", ("project_policy",), "Hong Kong romanization writes the z onset as ch, as in Chu and Cheung; costs the same as z -> j and more than c -> ch, so chun keeps its aspirated readings."),
+    SpellingRule("vowel.yu_to_u", "suffix", "yu", "u", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong casual spelling of the yu final without the y glide (chu, su, zu)."),
+    SpellingRule("vowel.yu_to_u_closed", "contains", "yu", "u", 0.8, "orthographic_alias", "vowel", ("project_policy",), "Glide-less lun, dun, tut for lyun, dyun, tyut; costs more than eon -> un so chun and sun keep their eon readings first."),
+    SpellingRule("vowel.yun_to_uen", "suffix", "yun", "uen", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong romanization of the yun final (chuen, suen, luen, tuen, huen); generalizes the explicit -uen aliases."),
+    SpellingRule("vowel.yut_to_uet", "suffix", "yut", "uet", 0.45, "orthographic_alias", "vowel", ("project_policy",), "Hong Kong romanization of the yut final (suet, huet, kuet)."),
 )
 
 # Explicit examples are not recursively rewritten. That prevents an exception
@@ -235,6 +244,7 @@ EXPLICIT_ALIASES = (
     ("cyun", "chuen", 0.45, "casual.chuen_cyun", "project_alias", ("project_policy",)),
     ("syun", "suen", 0.45, "casual.suen_syun", "project_alias", ("project_policy",)),
     ("jyun", "yuen", 0.45, "casual.yuen_jyun", "project_alias", ("project_policy",)),
+    ("jyut", "yuet", 0.45, "casual.yuet_jyut", "project_alias", ("project_policy",)),
     ("tyun", "tuen", 0.45, "casual.tuen_tyun", "project_alias", ("project_policy",)),
 )
 
@@ -341,6 +351,9 @@ def _apply(rule: SpellingRule, spelling: str) -> str | None:
         if rule.rule_id == "onset.j_to_y" and spelling in ("jyu", "jyun", "jyut"):
             return spelling[1:]
         return rule.replacement + spelling[len(rule.original):]
+    if rule.rule_id in ("vowel.yu_to_u", "vowel.yu_to_u_closed", "vowel.yun_to_uen", "vowel.yut_to_uet") and (
+        spelling.startswith(rule.original) or spelling.startswith("jyu")):
+        return None  # a bare vowel, or Jyutping-j ju/jun that would crowd z -> j input (jun for zeon)
     if rule.operation == "contains" and rule.original in spelling:
         return spelling.replace(rule.original, rule.replacement)
     if rule.operation == "suffix" and spelling.endswith(rule.original):

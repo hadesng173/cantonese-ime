@@ -63,9 +63,20 @@ class MappingTests(unittest.TestCase):
             ("soeng", "shueng", 0.8), ("soeng", "sheung", 0.45),
             ("zyun", "juen", 0.45), ("cyun", "chuen", 0.45), ("syun", "suen", 0.45),
             ("jyun", "yuen", 0.45), ("tyun", "tuen", 0.45),
+            # Hong Kong casual finals and the sh onset, alone and combined.
+            ("leoi", "lui", 0.45), ("seoi", "sui", 0.45), ("ceoi", "chui", 0.9),
+            ("leon", "lun", 0.45), ("seon", "shun", 0.9), ("ceot", "chut", 0.9), ("sik", "shik", 0.45),
+            # The yu glide may be dropped; open yu is cheaper than closed yun/yut.
+            ("syu", "su", 0.45), ("cyu", "chu", 0.9), ("zyu", "chu", 1.25), ("zyu", "zu", 0.45),
+            ("lyun", "luen", 0.45), ("hyut", "huet", 0.45), ("lyun", "lun", 0.8), ("jyut", "yuet", 0.45),
         ):
             with self.subTest(canonical=canonical, spelling=spelling):
                 self.assertAlmostEqual(spelling_variants(canonical)[spelling], cost)
+
+    def test_dropped_yu_glide_never_leaves_a_bare_vowel_or_jyutping_j(self) -> None:
+        for canonical, spelling in (("jyu", "u"), ("jyun", "uen"), ("jyut", "uet"), ("jyun", "jun"), ("jyu", "ju")):
+            with self.subTest(canonical=canonical, spelling=spelling):
+                self.assertNotIn(spelling, spelling_variants(canonical))
 
     def test_ambiguous_initials_retain_exact_and_alternative_readings(self) -> None:
         matches = resolve_syllable("jau", ["jau", "zau"])
