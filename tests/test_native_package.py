@@ -100,6 +100,7 @@ class NativePackageTests(unittest.TestCase):
                                            for name in self.mapping_names},
                                  "module_sha256": package.digest(self.mapping_module)}
         self.json("data/mappings/build.manifest.json", self.mapping_manifest)
+        self.write("data/vendor/scowl/2026.02.25/en_GB-ise.txt", b"meeting\n")
         dll = self.write(".local/native/build-x64/CantoneseIME.dll", pe_bytes())
         settings_app = self.write(".local/native/build-x64/CantoneseImeSettings.exe", pe_bytes() + b"settings")
         native_source = self.write("native/tsf/synthetic-source.cpp", b"// synthetic native source\n")

@@ -24,6 +24,7 @@ import time
 from typing import Iterable
 
 from .custom import CustomEntries, read_custom
+from .english import LearnedEnglish, load_words
 from .mappings import spelling_variants, yale_ascii, yale_ascii_variants
 
 
@@ -324,6 +325,9 @@ class Engine:
             self._load_learning()
             self._rebuild_span_learning()
             self._learning_generation = 0
+            self._english_words = load_words()
+            self._learned_english = LearnedEnglish(
+                self.learning_path.with_name("english-words.json") if self.learning_path is not None else None)
             self.custom_path = Path(custom_path).resolve() if custom_path is not None else None
             self.custom_error: str | None = None
             self._custom_stamp: tuple[int, int] | None = None
@@ -813,8 +817,11 @@ class Engine:
             candidates.append(Candidate(arc.entry.text, arc.entry.reading, score, kind, consumed))
 
         composition_truncated = indexed_long_word
+        # A whole English word is not split into per-syllable sentences or
+        # prefix completions; dictionary words for the input are kept.
+        english = mode == "forgiving" and (value in self._english_words or value in self._learned_english)
         try:
-            sentences = () if indexed_long_word else self._compose_sentences(arcs, size)
+            sentences = () if indexed_long_word or english else self._compose_sentences(arcs, size)
         except CompositionCapacityError:
             if not direct_arcs:
                 raise
@@ -829,8 +836,14 @@ class Engine:
             candidates.append(Candidate(hypothesis.text, " ".join(hypothesis.readings), score, "composed", consumed))
 
         direct_bases = {arc.entry.base for arc in direct_arcs.values()}
-        completions, completion_truncated = ([], False) if indexed_long_word else self._completions(value, consumed, mode, edges, direct_bases)
+        completions, completion_truncated = ([], False) if indexed_long_word or english else self._completions(value, consumed, mode, edges, direct_bases)
         candidates.extend(completions)
+        if english:
+            # A learned word leads unless an exact reading exists, then follows
+            # the exact ones; a listed word follows every dictionary match.
+            exact = any(arc.penalty == 0 for arc in direct_arcs.values())
+            score = (999.0 if exact else 5000.0) if value in self._learned_english else 900.0
+            candidates.append(Candidate(value, "", score, "english", consumed))
         # Personal phrase memory is limited to the exact normalized full input
         # and mode originally selected. It can retain a valid composed phrase
         # that a later bounded static search drops, without prefix prediction.
@@ -1028,7 +1041,15 @@ class Engine:
         if self.learning_path is None:
             return
         if not candidate.reading:
-            return  # Custom phrases carry no reading and are never learned.
+            # The typed letters committed as an English word are remembered;
+            # custom phrases carry no reading and are never learned.
+            if candidate.text == raw:
+                with self._lock:
+                    if candidate.text not in self._learned_english and self._learned_english.record(candidate.text):
+                        self._learning_generation += 1
+                        self._snapshot_key = None
+                        self._snapshot_value = None
+            return
         selected_mode = self.mode if mode is None else mode
         self._check_mode(selected_mode)
         value = self._normalise(raw)

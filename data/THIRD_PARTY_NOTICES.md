@@ -326,3 +326,16 @@ them using the recorded hash policy. Unsupported annotations and long spans
 have explicit exclusion counts. These changes are this project's responsibility.
 Retain attribution, the license and the change notice when redistributing the
 derived cases. No endorsement or independent approval of this IME is implied.
+
+## SCOWL English word list
+
+English candidates use the **SCOWL** British (-ise) speller word list, size 60,
+release 2026.02.25, Copyright 2000-2026 by **Kevin Atkinson**, distributed under
+its permissive notice (use, copy, modify, distribute and sell, with the
+copyright and permission notice retained).
+
+- Source: [en-wl/wordlist-diff, rel-2026.02.25](https://github.com/en-wl/wordlist-diff/tree/rel-2026.02.25)
+- Retained [copyright and permission notice](vendor/scowl/2026.02.25/Copyright) and [source lock](vendor/scowl/2026.02.25/source.lock.json)
+
+The list file is unmodified. At run time only lowercase letter-only entries
+are used, to recognise a whole typed input as an English word.

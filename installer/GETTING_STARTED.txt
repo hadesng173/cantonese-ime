@@ -5,6 +5,10 @@ Windows 10/11, native x64 applications
 Press Windows + Space and choose Cantonese IME. Type plain Yale or Jyutping
 letters. For example, fogeui finds 火炬. Press a candidate's number or Space
 to select it. The compact candidate window shows numbered choices.
+To type an English word, press Shift+Space (or Space when no candidate
+matches) to enter the letters with a space; Enter enters them without one.
+Common English words, and words you have entered this way, appear as a
+candidate themselves.
 
 Cantonese IME appears under Chinese (Traditional, Hong Kong SAR). Setup adds
 this keyboard input source for your account and preserves your English

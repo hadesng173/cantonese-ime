@@ -31,7 +31,10 @@ After installation, press **Win+Space** and choose **Cantonese IME** under
 available separately; **ENG** identifies that English source. For example,
 type `fogeui` for 火炬 or `neihou` for 你好. Press Space to commit the highlighted
 choice, or 1–9 to choose its numbered candidate. Escape cancels; Enter commits
-the typed Latin letters. Ctrl+Space or the native **粵 / 英** button changes modes.
+the typed Latin letters. Space commits them as an English word with a trailing
+space when nothing matches, and Shift+Space always does. A whole input that is a
+common English word (the bundled SCOWL list) or one you have entered this way
+before is offered as the word itself, instead of per-syllable combinations. Ctrl+Space or the native **粵 / 英** button changes modes.
 Windows hosts that expose the TSF system tray/language bar can show the new
 branding and mode icons. Reopen applications after an upgrade so they load
 the new DLL. Chrome may keep background processes alive after its windows close;

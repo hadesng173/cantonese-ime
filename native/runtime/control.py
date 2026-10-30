@@ -73,6 +73,7 @@ def runtime_files(root: Path) -> set[str]:
         "native/backend/server.py", "native/runtime/control.py", "native/runtime/Start-Runtime.ps1",
         "native/CantoneseIME.dll", "data/generated/lexicon.sqlite3", "data/generated/lexicon.manifest.json",
         "data/mappings/syllables.json", "data/mappings/spellings.json", "data/mappings/build.manifest.json",
+        "data/vendor/scowl/2026.02.25/en_GB-ise.txt",
     }
     files.update(path.relative_to(root).as_posix() for path in (root / "cantonese_ime").glob("*.py"))
     # Release builds carry a private interpreter. Pin the complete distribution,

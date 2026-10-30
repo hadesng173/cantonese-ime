@@ -403,6 +403,7 @@ def stage(output: Path, python: Path, *, bundled_runtime: Path | None = None, re
         add(path.relative_to(ROOT).as_posix(), path)
     for relative in ("data/generated/lexicon.sqlite3", "data/generated/lexicon.manifest.json",
                      "data/mappings/syllables.json", "data/mappings/spellings.json", "data/mappings/build.manifest.json",
+                     "data/vendor/scowl/2026.02.25/en_GB-ise.txt",
                      "native/backend/server.py", "native/runtime/control.py",
                      "native/runtime/Start-Runtime.ps1", "native/runtime/README.md",
                      "native/Install-NativeIme.ps1", "native/Remove-NativeIme.ps1",

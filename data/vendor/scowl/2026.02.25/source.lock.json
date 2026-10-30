@@ -1,0 +1,20 @@
+{
+  "name": "SCOWL English speller word list (British -ise spelling, size 60)",
+  "release": "rel-2026.02.25",
+  "repository": "https://github.com/en-wl/wordlist-diff",
+  "license": "SCOWL permissive notice; see Copyright",
+  "files": [
+    {
+      "name": "Copyright",
+      "size_bytes": 4863,
+      "sha256": "090575a131b4260926c7a6b30a90aca0f5db5fbb5c46778e0c5855227bf6ebc3",
+      "url": "https://raw.githubusercontent.com/en-wl/wordlist-diff/rel-2026.02.25/Copyright"
+    },
+    {
+      "name": "en_GB-ise.txt",
+      "size_bytes": 1030707,
+      "sha256": "82b22843c9958a1efac291e0ea7dbef22ce227dd4e5ca0fd84043cbc62e0a4f1",
+      "url": "https://raw.githubusercontent.com/en-wl/wordlist-diff/rel-2026.02.25/en_GB-ise.txt"
+    }
+  ]
+}
