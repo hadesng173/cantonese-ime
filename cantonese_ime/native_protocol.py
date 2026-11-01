@@ -12,6 +12,7 @@ import re
 import struct
 
 from .engine import Candidate, CompositionCapacityError, Engine, PaginationCapacityError
+from .english import WORD as ENGLISH_WORD
 
 
 MAGIC = 0x31454D49  # IME1
@@ -150,6 +151,8 @@ def validate_learning_request(request: LearningRequest) -> None:
     if not isinstance(request.text, str) or not 1 <= len(request.text) <= 256:
         raise ProtocolError("Invalid selected text length.")
     _text_bytes(request.text)
+    if request.reading == "" and request.text == request.raw and ENGLISH_WORD.fullmatch(request.raw):
+        return  # The typed letters committed as an English word.
     if not isinstance(request.reading, str) or not LEARNING_READING.fullmatch(request.reading):
         raise ProtocolError("Learning requires a canonical toned reading.")
 

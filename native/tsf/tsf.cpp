@@ -63,6 +63,9 @@ struct SelectionMemory {
     std::wstring raw;
     cime::Candidate candidate;
     bool strict = false;
+    // The typed letters as an English word: committed with a trailing space,
+    // remembered by the broker, and not part of a suggestion sequence.
+    bool English() const { return candidate.reading.empty() && !raw.empty() && candidate.text == raw; }
 };
 
 struct LearningTask {
@@ -330,6 +333,7 @@ public:
     HRESULT DocumentManager(ITfDocumentMgr** result) { if (!result) return E_POINTER; *result = nullptr; return context_ ? context_->GetDocumentMgr(result) : E_FAIL; }
     HRESULT Select(UINT, bool synchronous = true);
     HRESULT Finish(bool cancel, bool synchronous = true);
+    HRESULT CommitLatin();  // The typed letters plus a space, as Space does in English.
     HRESULT Highlight(UINT index) { if (index >= page_.candidates.size()) return E_INVALIDARG; selected_ = index; UpdateCandidates(); return S_OK; }
     bool EnglishMode() const override { return english_; }
     HRESULT ToggleInputMode() override {
@@ -521,20 +525,28 @@ bool TextService::Enabled(ITfContext* context) const {
     if (FAILED(context->GetStatus(&status)) || (status.dwDynamicFlags & TF_SD_READONLY)) return false;
     return !CompartmentDisabled(context, GUID_COMPARTMENT_KEYBOARD_DISABLED) && !CompartmentDisabled(context, GUID_COMPARTMENT_EMPTYCONTEXT);
 }
+// The syllable separator is whichever key types an apostrophe in the active
+// layout (VK_OEM_7 on US, VK_OEM_3 on UK), not a fixed virtual key.
+static bool SeparatorKey(WPARAM key) {
+    const UINT typed = MapVirtualKeyExW(static_cast<UINT>(key), MAPVK_VK_TO_CHAR, GetKeyboardLayout(0)) & 0x7FFFFFFF;
+    return typed ? typed == L'\'' : key == VK_OEM_7;
+}
 bool TextService::WantsKey(ITfContext* context, WPARAM key) const {
     if (!Enabled(context)) return false;
     const bool control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     const bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
     if (control && !alt && key == VK_SPACE) return true;
     if (english_ || control || alt || (GetKeyState(VK_LWIN) & 0x8000) || (GetKeyState(VK_RWIN) & 0x8000)) return false;
-    if ((GetKeyState(VK_SHIFT) & 0x8000) || (GetKeyState(VK_CAPITAL) & 1)) return false;
+    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (shift && key == VK_SPACE && !raw_.empty()) return true;  // Shift+Space commits the letters as English.
+    if (shift || (GetKeyState(VK_CAPITAL) & 1)) return false;
     if (key >= 'A' && key <= 'Z') return true;
     // Showing suggestions: only Escape and a listed digit belong to the IME;
     // everything else reaches the application and dismisses them.
     if (predicting_ && raw_.empty())
         return key == VK_ESCAPE || (key >= '1' && key <= '9' && static_cast<std::size_t>(key - '1') < page_.candidates.size());
     if (raw_.empty()) return false;
-    return key == VK_OEM_7 || key == VK_BACK || key == VK_SPACE || key == VK_RETURN || key == VK_ESCAPE ||
+    return SeparatorKey(key) || key == VK_BACK || key == VK_SPACE || key == VK_RETURN || key == VK_ESCAPE ||
         key == VK_UP || key == VK_DOWN || key == VK_PRIOR || key == VK_NEXT || (key >= '1' && key <= '9');
 }
 bool TextService::CheckInput(ITfContext* context) {
@@ -587,8 +599,9 @@ HRESULT TextService::OnKeyDown(ITfContext* context, WPARAM key, LPARAM, BOOL* ea
         } else if (key == VK_ESCAPE || key == VK_RETURN) {
             if (SUCCEEDED(Finish(key == VK_ESCAPE))) *eaten = TRUE;
         } else if (key == VK_SPACE) {
-            if (!page_.candidates.empty()) *eaten = SUCCEEDED(Select(selected_));
-            else *eaten = TRUE;
+            // With no candidate, or with Shift, the letters were an English word.
+            if (page_.candidates.empty() || (GetKeyState(VK_SHIFT) & 0x8000)) *eaten = SUCCEEDED(CommitLatin());
+            else *eaten = SUCCEEDED(Select(selected_));
         } else if (key >= '1' && key <= '9') {
             const UINT index = static_cast<UINT>(key - '1');
             *eaten = index < page_.candidates.size() ? SUCCEEDED(Select(index)) : TRUE;
@@ -602,7 +615,7 @@ HRESULT TextService::OnKeyDown(ITfContext* context, WPARAM key, LPARAM, BOOL* ea
             std::wstring next = raw_;
             if (key == VK_BACK) { if (!next.empty()) next.pop_back(); }
             else if (next.size() >= cime::kMaxInputLength) *eaten = TRUE;
-            else next.push_back(key == VK_OEM_7 ? L'\'' : static_cast<wchar_t>(key - 'A' + L'a'));
+            else next.push_back(SeparatorKey(key) ? L'\'' : static_cast<wchar_t>(key - 'A' + L'a'));
             if (!*eaten) {
                 cime::Page proposed;
                 const bool available = next.empty() || backend_.Lookup(next, strict_, 0, proposed);
@@ -722,8 +735,8 @@ HRESULT TextService::DoEdit(ITfContext* context, TfEditCookie cookie, EditKind k
             // Only a completed candidate commit reaches this point. Rendering,
             // cancellation, literal Enter and stale/failed edits never learn.
             QueueSelectionLearning(selection_memory);
-            if (!selection_memory.raw.empty()) AfterCommit(context, selection_memory.candidate.text);
-            else BreakSequence();  // Literal Latin text or a cancel is not part of a sequence.
+            if (!selection_memory.raw.empty() && !selection_memory.English()) AfterCommit(context, selection_memory.candidate.text);
+            else BreakSequence();  // Latin text or a cancel is not part of a sequence.
         }
     }
     return result;
@@ -755,11 +768,16 @@ HRESULT TextService::Finish(bool cancel, bool synchronous) {
     if (!context_ || !composition_) return S_FALSE;
     return Request(context_.Get(), EditKind::Render, cancel ? L"" : raw_, true, synchronous);
 }
+HRESULT TextService::CommitLatin() {
+    if (!context_ || !composition_) return S_FALSE;
+    SelectionMemory selection{raw_, cime::Candidate{raw_, L""}, strict_};
+    return Request(context_.Get(), EditKind::Render, raw_ + L" ", true, true, std::move(selection));
+}
 HRESULT TextService::Select(UINT index, bool synchronous) {
     if (predicting_) return CommitPrediction(index, synchronous);
     if (!context_ || index >= page_.candidates.size()) return E_INVALIDARG;
     SelectionMemory selection{raw_, page_.candidates[index], strict_};
-    const std::wstring chosen = selection.candidate.text;
+    const std::wstring chosen = selection.English() ? selection.candidate.text + L" " : selection.candidate.text;
     return Request(context_.Get(), EditKind::Render, chosen, true, synchronous, std::move(selection));
 }
 bool TextService::LoadPage(std::uint32_t offset, bool forward) {

@@ -236,7 +236,8 @@ bool Backend::Lookup(const std::wstring& raw, bool strict, std::uint32_t offset,
 bool Backend::RecordSelection(const std::wstring& raw, bool strict, const Candidate& candidate) {
     try {
         if (raw.empty() || raw.size() > kMaxInputLength || candidate.text.empty() || candidate.text.size() > 512 ||
-            candidate.reading.empty() || candidate.reading.size() > kMaxLearningReadingBytes) return false;
+            (candidate.reading.empty() && candidate.text != raw) ||  // Reading-less only for an English word.
+            candidate.reading.size() > kMaxLearningReadingBytes) return false;
         std::string input;
         for (wchar_t letter : raw) {
             if (!((letter >= L'a' && letter <= L'z') || letter == L'\'')) return false;
