@@ -24,7 +24,7 @@ import time
 from typing import Iterable
 
 from .custom import CustomEntries, read_custom
-from .english import LearnedEnglish, load_words
+from .english import LearnedEnglish, load_translations, load_words
 from .mappings import spelling_variants, yale_ascii, yale_ascii_variants
 
 
@@ -34,6 +34,7 @@ MAX_CANDIDATES = 90
 MAX_OFFSET = 10000
 _COMPOSITION_WORK_LIMIT = 100000
 _FUZZY_COST = 6.0
+_MAX_TRANSLATIONS = 5  # Chinese words offered for a whole English word
 _MAX_LEARNING_BYTES = 4_000_000
 _MAX_LEARNING_RECORDS = 10000
 _LEARNING_DECAY = 0.8
@@ -326,6 +327,7 @@ class Engine:
             self._rebuild_span_learning()
             self._learning_generation = 0
             self._english_words = load_words()
+            self._translations = load_translations()
             self._learned_english = LearnedEnglish(
                 self.learning_path.with_name("english-words.json") if self.learning_path is not None else None)
             self.custom_path = Path(custom_path).resolve() if custom_path is not None else None
@@ -844,6 +846,8 @@ class Engine:
             exact = any(arc.penalty == 0 for arc in direct_arcs.values())
             score = (999.0 if exact else 5000.0) if value in self._learned_english else 900.0
             candidates.append(Candidate(value, "", score, "english", consumed))
+            if not direct_arcs:
+                candidates.extend(self._translated(value, consumed))
         # Personal phrase memory is limited to the exact normalized full input
         # and mode originally selected. It can retain a valid composed phrase
         # that a later bounded static search drops, without prefix prediction.
@@ -865,6 +869,23 @@ class Engine:
             if previous is None or (candidate.score, candidate.reading) > (previous.score, previous.reading):
                 unique[candidate.text] = candidate
         return _Snapshot(tuple(sorted(unique.values(), key=lambda c: (-c.score, c.text, c.reading))), completion_truncated or composition_truncated or learned_truncated)
+
+    def _translated(self, value: str, consumed: int) -> list[Candidate]:
+        """Chinese words glossed as this English word, after the word itself.
+
+        Only headwords in this dictionary are offered, with their most common
+        reading, so a choice is learned like any other candidate. Earlier
+        glosses and more common words rank first.
+        """
+        ranked = []
+        for text, position in self._translations.get(value, ()):
+            row = self._db.execute(
+                "SELECT reading, weight FROM entries WHERE text = ? ORDER BY weight DESC, reading LIMIT 1", (text,)).fetchone()
+            if row is not None:
+                ranked.append((2.0 * min(position, 3) - math.log1p(max(row[1], 0.0)), text, row[0]))
+        ranked.sort()
+        return [Candidate(text, reading, 850.0 - index, "translation", consumed)
+                for index, (_, text, reading) in enumerate(ranked[:_MAX_TRANSLATIONS])]
 
     def _compose_sentences(self, arcs, size: int, *, work_limit: int = _COMPOSITION_WORK_LIMIT) -> tuple[_Sentence, ...]:
         """Best 90 distinct composed texts on the retained dictionary-arc DAG.

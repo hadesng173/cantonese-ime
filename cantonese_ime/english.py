@@ -12,10 +12,67 @@ from pathlib import Path
 import re
 import tempfile
 
-WORD_LIST = Path(__file__).resolve().parent.parent / "data/vendor/scowl/2026.02.25/en_GB-ise.txt"
+ROOT = Path(__file__).resolve().parent.parent
+WORD_LIST = ROOT / "data/vendor/scowl/2026.02.25/en_GB-ise.txt"
+TRANSLATIONS = ROOT / "data/english/english-chinese.tsv"
+TRANSLATION_SOURCES = (
+    ROOT / "data/vendor/cc-cedict/2026-10-21-f6b2248b589a/cedict_ts.u8",
+    ROOT / "data/vendor/cc-canto/2017-02-02-and-2015-09-23/cccanto-webdist.txt",
+)
 WORD = re.compile(r"[a-z]{2,24}\Z", re.ASCII)
 MAX_LEARNED = 5000
+MAX_TRANSLATIONS_PER_WORD = 30
 _MAX_LIST_BYTES = 4 * 1024 * 1024
+_ENTRY = re.compile(r"^(\S+) \S+ \[[^\]]*\](?: \{[^}]*\})? /(.*)/\s*$")
+_SKIPPED_GLOSS = ("CL:", "variant of", "old variant", "see ", "surname ", "abbr. for", "used in ")
+
+
+def gloss_index(lines) -> dict[str, dict[str, int]]:
+    """English gloss word -> Traditional headword -> position of the earliest gloss naming it.
+
+    Only a gloss (or a ;/, part of one) that is a single word after dropping
+    parentheses, a leading to/a/an/the/I'm and trailing !/. counts, so
+    "to meet; to encounter" indexes meet and encounter.
+    """
+    index: dict[str, dict[str, int]] = {}
+    for line in lines:
+        match = _ENTRY.match(line)
+        if not match:
+            continue
+        headword, position = match.group(1), 0
+        for gloss in match.group(2).split("/"):
+            if gloss.startswith(_SKIPPED_GLOSS):
+                continue
+            for part in re.split(r"[;,]", gloss):
+                part = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", part).strip().lower().rstrip("!.")
+                part = re.sub(r"^(?:to|a|an|the|i'm|i am) ", "", part).strip()
+                if WORD.fullmatch(part):
+                    entries = index.setdefault(part, {})
+                    entries[headword] = min(entries.get(headword, position), position)
+            position += 1
+    return index
+
+
+def load_translations(path: Path = TRANSLATIONS) -> dict[str, tuple[tuple[str, int], ...]]:
+    """The generated english-chinese.tsv: word, then headword:position pairs."""
+    result: dict[str, tuple[tuple[str, int], ...]] = {}
+    try:
+        if path.stat().st_size > 16 * 1024 * 1024:
+            return {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith("#"):
+                continue
+            word, _, rest = line.partition("\t")
+            pairs = []
+            for item in rest.split(" "):
+                headword, _, position = item.rpartition(":")
+                if headword and position.isdigit():
+                    pairs.append((headword, int(position)))
+            if WORD.fullmatch(word) and pairs:
+                result[word] = tuple(pairs)
+    except (OSError, UnicodeDecodeError):
+        return {}  # Translations are optional; conversion must not fail.
+    return result
 
 
 def load_words(path: Path = WORD_LIST) -> frozenset[str]:

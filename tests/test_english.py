@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from cantonese_ime.engine import Candidate, Engine
-from cantonese_ime.english import WORD_LIST, LearnedEnglish, load_words
+from cantonese_ime.english import TRANSLATIONS, WORD_LIST, LearnedEnglish, gloss_index, load_words
 from cantonese_ime.native_protocol import LearningRequest, ProtocolError, validate_learning_request
 from tests.test_engine import create_fixture_database
 
@@ -67,6 +67,31 @@ class EnglishWordTests(unittest.TestCase):
         self.assertTrue(learned.record("commit"))
         self.assertIn("commit", LearnedEnglish(path))
         self.assertFalse(LearnedEnglish(None).record("commit"))
+
+    def test_gloss_index_reads_single_word_glosses(self) -> None:
+        index = gloss_index([
+            "見面 见面 [jian4 mian4] /to meet; to see each other/\n",
+            "滿足 满足 [man3 zu2] /to satisfy/to meet (the needs of)/\n",
+            "保險 保险 [bao3 xian3] /insurance/CL:份[fen4]/\n",
+            "# comment\n",
+        ])
+        self.assertEqual(index["meet"], {"見面": 0, "滿足": 1})
+        self.assertEqual(index["insurance"], {"保險": 0})
+        self.assertNotIn("see each other", index)
+
+    def test_committed_index_matches_its_pinned_sources(self) -> None:
+        from tools.build_english_chinese import render
+        self.assertEqual(TRANSLATIONS.read_text(encoding="utf-8"), render())
+
+    def test_translations_follow_the_english_word_only_without_a_reading(self) -> None:
+        engine = self.engine()
+        engine._translations = {"insurance": (("保險", 0), ("燕梳", 0)), "long": (("長", 0),)}
+        candidates = engine.lookup("insurance")
+        self.assertEqual([(c.text, c.reading, c.match_type) for c in candidates],
+                         [("insurance", "", "english"), ("保險", "bou2 him2", "translation")])  # 燕梳 is not in this dictionary
+        self.assertNotIn("長", [c.text for c in engine.lookup("long")])
+        engine.record_selection("insurance", candidates[1])  # learned like any other candidate
+        self.assertEqual(engine.lookup("insurance")[0].text, "保險")
 
     def test_protocol_accepts_reading_less_learning_only_for_the_typed_word(self) -> None:
         validate_learning_request(LearningRequest(1, 0, "commit", "commit", ""))

@@ -8,7 +8,7 @@ to select it. The compact candidate window shows numbered choices.
 To type an English word, press Shift+Space (or Space when no candidate
 matches) to enter the letters with a space; Enter enters them without one.
 Common English words, and words you have entered this way, appear as a
-candidate themselves.
+candidate themselves, followed by Chinese translations (meet: 見面, 相遇).
 
 Cantonese IME appears under Chinese (Traditional, Hong Kong SAR). Setup adds
 this keyboard input source for your account and preserves your English
