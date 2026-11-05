@@ -307,7 +307,10 @@ class Windows(Win32):
         handle = self.kernel.OpenProcess(0x1000 | 0x00100000, False, pid)
         if not handle:
             code = _last_error()
-            if code == 87:  # ERROR_INVALID_PARAMETER: process no longer exists.
+            # ERROR_INVALID_PARAMETER: the process no longer exists. ERROR_ACCESS_DENIED:
+            # the PID now belongs to a process this user cannot open, so it is not
+            # this user's broker (after a sign-in, Windows may reuse the old PID).
+            if code in (87, 5):
                 yield None
                 return
             raise _win_error(code)
@@ -438,7 +441,9 @@ def start(config: Config, api, state: State, *, timeout: float = 20) -> dict:
     owner = _owned(state, config)
     if owner is not None:
         with api.process(owner["process"]["pid"]) as process:
-            if process is not None:
+            # A different process identity under the recorded PID means the
+            # broker exited and its PID was reused: the record is stale.
+            if process is not None and process.identity == owner.get("process"):
                 _matches_process(process, owner, state)
                 if owner.get("runtime_fingerprint") != fingerprint(config):
                     raise RuntimeError("Running broker uses another build; stop it before starting this build.")

@@ -359,6 +359,32 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(self.state.file("ownership.json").exists())
         self.assertTrue(self.state.file("stop.json").exists())
 
+    def test_start_replaces_a_record_whose_pid_was_reused(self):
+        for reused in ("same_user", "unopenable"):
+            with self.subTest(reused=reused):
+                self.publish(self.owner())
+                self.api.pipe = None  # the old broker's pipe is gone with it
+                if reused == "same_user":
+                    self.process.identity["creation_time"] += 1
+                    lookups = iter(())
+                else:
+                    lookups = iter((None,))  # OpenProcess denied on the old PID maps to no broker
+                real_process = self.api.process
+
+                @contextmanager
+                def process(pid):
+                    stale = next(lookups, False)
+                    if stale is None:
+                        yield None
+                    else:
+                        with real_process(pid) as current:
+                            yield current
+
+                with mock.patch.object(self.api, "process", process),                         mock.patch.object(control.subprocess, "Popen", side_effect=self.spawn) as spawn:
+                    self.assertEqual(control.start(self.config, self.api, self.state)["status"], "ready")
+                spawn.assert_called_once()
+                self.assertEqual(control.read_json(self.state.file("ownership.json"))["process"], self.process.identity)
+
     def test_stale_dead_process_can_be_cleaned_without_a_stop_request(self):
         self.publish(self.owner())
         self.api.current_process = None
