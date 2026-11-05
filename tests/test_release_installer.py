@@ -32,6 +32,12 @@ class LifecycleTests(unittest.TestCase):
         (self.root / "native/CantoneseMachineRegistration.exe").write_bytes(b"old fixture helper")
         (self.root / "runtime-config.json").write_text('{"fixture":"old"}', encoding="utf-8")
         self.receipt = self.directory / "prepare.json"
+        # Never touch the real System32 directory from tests.
+        (self.directory / "System32").mkdir()
+        self.system_dll = self.directory / "System32/CantoneseIME.dll"
+        system = patch.object(lifecycle, "system_dll", return_value=self.system_dll)
+        system.start()
+        self.addCleanup(system.stop)
 
     def user_context(self, controller):
         stack = ExitStack()
@@ -430,6 +436,55 @@ class LifecycleTests(unittest.TestCase):
         helper.assert_called_once_with(self.root, "refresh-registration")
         self.assertTrue((self.root / "installation.json").is_file())
         self.assertIn("Registration committed", output.getvalue())
+
+    def test_install_registers_a_verified_system32_copy_of_the_product_dll(self):
+        config = {"python_executable": "runtime/python/python.exe", "learning_enabled": True, "learning_file": None}
+        lifecycle.write_json(self.root / "runtime-config.json", config)
+        lifecycle.write_json(self.receipt, {"existing": True, "status": "prepared"})
+        current = {"kind": lifecycle.RELEASE_KIND, "version": "1.0.0", "native_dll_sha256": "a" * 64}
+        with self.machine_context(current), patch.object(lifecycle, "helper") as helper, redirect_stdout(io.StringIO()):
+            lifecycle.install_machine(self.root, self.receipt, "b" * 64)
+        helper.assert_called_once_with(self.root, "refresh-registration")
+        self.assertEqual(self.system_dll.read_bytes(), (self.root / "native/CantoneseIME.dll").read_bytes())
+        plan = (self.root / "machine-registration.plan").read_text(encoding="utf-8")
+        self.assertIn("dll_source=" + str(self.root / "native/CantoneseIME.dll") + "\n", plan)
+        self.assertIn("dll_target=" + str(self.system_dll) + "\n", plan)
+        self.assertEqual(sorted(path.name for path in self.system_dll.parent.iterdir()), ["CantoneseIME.dll"])
+
+    def test_system32_copy_replaces_an_older_copy_and_both_bindings_are_owned(self):
+        self.system_dll.write_bytes(b"older copy")
+        lifecycle.place_system_dll(self.root)
+        self.assertEqual(self.system_dll.read_bytes(), b"old fixture DLL")
+        self.assertTrue(lifecycle.owned_binding(str(self.root / "native/CantoneseIME.dll"), self.root))
+        self.assertTrue(lifecycle.owned_binding(str(self.system_dll), self.root))
+        self.assertFalse(lifecycle.owned_binding(str(self.directory / "other.dll"), self.root))
+        self.assertFalse(lifecycle.owned_binding(None, self.root))
+
+    def test_a_mapped_system32_copy_is_renamed_for_deletion_at_restart(self):
+        self.system_dll.write_bytes(b"older copy")
+        unlink = Path.unlink
+
+        def mapped(path, *args, **kwargs):
+            if path == self.system_dll:
+                raise PermissionError("fixture: mapped by a running app")
+            return unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", mapped), patch.object(lifecycle.ctypes.windll.kernel32, "MoveFileExW") as later:
+            lifecycle.retire_system_dll(self.system_dll)
+        self.assertFalse(self.system_dll.exists())
+        retired = [path for path in self.system_dll.parent.iterdir()]
+        self.assertEqual(len(retired), 1)
+        self.assertTrue(retired[0].name.startswith("CantoneseIME.previous-"))
+        later.assert_called_once_with(str(retired[0]), None, 0x4)
+
+    def test_uninstall_removes_the_system32_copy_after_registration(self):
+        self.system_dll.write_bytes(b"old fixture DLL")
+        with patch.object(lifecycle, "require_token"), patch.object(lifecycle, "manifest", return_value={}), \
+                patch.object(lifecycle, "controller"), patch.object(lifecycle, "refuse_active_runtime"), \
+                patch.object(lifecycle, "helper") as helper, patch.object(lifecycle, "remove_loaded_user_startup"):
+            lifecycle.uninstall_machine(self.root)
+        helper.assert_called_once_with(self.root, "remove")
+        self.assertFalse(self.system_dll.exists())
 
     def test_fresh_failed_registration_cleanup_precedes_file_removal(self):
         lifecycle.write_json(self.receipt, {"status": "prepared", "existing": False, "registration_attempted": True})
