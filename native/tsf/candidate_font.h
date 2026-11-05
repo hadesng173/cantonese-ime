@@ -14,6 +14,19 @@ inline bool EqualCandidatePath(const std::wstring& left, const std::wstring& rig
     return CompareStringOrdinal(left.c_str(), -1, right.c_str(), -1, TRUE) == CSTR_EQUAL;
 }
 
+// The product DLL path that anchors bundled files. A release registers a copy
+// in System32 (games such as World of Warcraft load text services only from
+// there); the product files, with the identical DLL, stay in 64-bit Program Files.
+inline std::wstring ProductModulePath(const std::wstring& module_path) {
+    const std::wstring suffix = L"\\native\\CantoneseIME.dll";
+    if (module_path.size() > suffix.size() &&
+        EqualCandidatePath(module_path.substr(module_path.size() - suffix.size()), suffix)) return module_path;
+    wchar_t expanded[MAX_PATH]{};
+    const DWORD length = ExpandEnvironmentStringsW(L"%ProgramW6432%\\CantoneseIME\\native\\CantoneseIME.dll", expanded, MAX_PATH);
+    if (!length || length > MAX_PATH || expanded[0] == L'%') return module_path;
+    return expanded;
+}
+
 inline bool CandidateFontPaths(const std::wstring& module_path, std::wstring& root, std::wstring& font_path) {
     // The release is a local AMD64 desktop DLL. Do not resolve through the CWD,
     // PATH, a network path or a caller-controlled relative font search path.
@@ -94,7 +107,7 @@ public:
             std::vector<wchar_t> path(32768);
             const DWORD copied = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
             if (!copied || copied >= path.size()) { attempted_ = true; return false; }
-            return EnsureForModulePath(std::wstring(path.data(), copied));
+            return EnsureForModulePath(ProductModulePath(std::wstring(path.data(), copied)));
         } catch (...) { attempted_ = true; return false; }
     }
     // The production caller passes GetModuleFileNameW for the actual TSF DLL.

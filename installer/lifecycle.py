@@ -129,6 +129,48 @@ def same_path(left: str, right: Path) -> bool:
     return os.path.normcase(str(Path(left).absolute())) == os.path.normcase(str(right.absolute()))
 
 
+def system_dll() -> Path:
+    """The registered copy. Games such as World of Warcraft load text-service
+    DLLs only from System32; the product files stay under Program Files."""
+    buffer = ctypes.create_unicode_buffer(32768)
+    count = ctypes.windll.kernel32.GetSystemDirectoryW(buffer, len(buffer))
+    if not count or count >= len(buffer):
+        raise OSError("Cannot read the System32 directory.")
+    return Path(buffer.value) / "CantoneseIME.dll"
+
+
+def owned_binding(actual: str | None, root: Path) -> bool:
+    # Installs before the System32 copy bound the Program Files DLL directly.
+    return actual is not None and (same_path(actual, root / "native/CantoneseIME.dll") or same_path(actual, system_dll()))
+
+
+def retire_system_dll(target: Path):
+    """Remove the System32 copy; one mapped by running apps is renamed and deleted at restart."""
+    if not target.exists():
+        return
+    try:
+        target.unlink()
+    except PermissionError:
+        retired = target.with_name(target.stem + ".previous-" + uuid.uuid4().hex + target.suffix)
+        os.replace(target, retired)
+        ctypes.windll.kernel32.MoveFileExW(str(retired), None, 0x4)  # MOVEFILE_DELAY_UNTIL_REBOOT
+
+
+def place_system_dll(root: Path):
+    source, target = root / "native/CantoneseIME.dll", system_dll()
+    if target.is_file() and digest(target) == digest(source):
+        return
+    staged = target.with_name(target.stem + ".new-" + uuid.uuid4().hex + target.suffix)
+    shutil.copyfile(source, staged)
+    try:
+        if digest(staged) != digest(source):
+            raise ValueError("The System32 DLL copy differs from the product DLL.")
+        retire_system_dll(target)
+        os.replace(staged, target)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
 def controller(root: Path, command: str, *, python: Path | None = None) -> dict:
     config = read_json(root / "runtime-config.json")
     configured = Path(config["python_executable"])
@@ -199,7 +241,7 @@ def prepare_user(root: Path, receipt: Path | None):
         if override is not None:
             raise RuntimeError("An old per-user development COM override exists. Remove that exact preview override before installing this release.")
         machine = binding(winreg.HKEY_LOCAL_MACHINE)
-        if machine is None or not same_path(machine, root / "native/CantoneseIME.dll"):
+        if not owned_binding(machine, root):
             raise ValueError("Existing files do not have this product's exact machine binding.")
         result["enabled_languages"] = [language for language in ("0409", "0c04") if enabled(root, language)]
         result["language"] = "0409" if "0409" in result["enabled_languages"] else "0c04" if "0c04" in result["enabled_languages"] else "0409"
@@ -228,7 +270,7 @@ def prepare_machine(root: Path, receipt: Path, next_manifest: Path, expected: st
         helper(root, "dry-run-remove")
         refuse_active_runtime(root, current)
         actual = binding(winreg.HKEY_LOCAL_MACHINE)
-        if actual is None or not same_path(actual, root / "native/CantoneseIME.dll"):
+        if not owned_binding(actual, root):
             raise ValueError("Refusing to replace an unrelated machine COM binding.")
         next_files = {record["path"]: record["sha256"] for record in upcoming["files"]}
         old_files = {record["path"] for record in current["files"]}
@@ -273,11 +315,12 @@ def install_machine(root: Path, receipt: Path, expected: str):
             or config.get("learning_enabled") is not True or config.get("learning_file") is not None):
         raise ValueError("The release must use the private runtime and ordinary per-user learning.")
     actual = binding(winreg.HKEY_LOCAL_MACHINE)
-    if actual is not None and not same_path(actual, root / "native/CantoneseIME.dll"):
+    if actual is not None and not owned_binding(actual, root):
         raise ValueError("Machine registration belongs to another installation.")
     dll = root / "native/CantoneseIME.dll"
+    place_system_dll(root)
     plan = "\n".join(("CANTONESE_IME_MACHINE_V1", "clsid=" + CLSID, "profile=" + PROFILE,
-                      "languages=0409,0c04", "dll_source=" + str(dll), "dll_target=" + str(dll),
+                      "languages=0409,0c04", "dll_source=" + str(dll), "dll_target=" + str(system_dll()),
                       "dll_sha256=" + current["native_dll_sha256"])) + "\n"
     (root / "machine-registration.plan").write_text(plan, encoding="utf-8")
     journal = read_json(receipt)
@@ -458,6 +501,7 @@ def uninstall_machine(root: Path):
     controller(root, "stop")
     refuse_active_runtime(root, manifest(root, all_files=False))
     helper(root, "remove")
+    retire_system_dll(system_dll())
     remove_loaded_user_startup(root)
     # No access to learning.json or dictionary selection history occurs here.
 
@@ -488,10 +532,15 @@ def rollback_machine(root: Path, receipt: Path):
         for name in journal.get("introduced_files", []):
             payload_path(root, name).unlink(missing_ok=True)
         manifest(root)
+        # The registered System32 copy must match the restored product DLL again.
+        actual = binding(winreg.HKEY_LOCAL_MACHINE)
+        if actual is not None and same_path(actual, system_dll()):
+            place_system_dll(root)
     elif journal.get("registration_attempted") and binding(winreg.HKEY_LOCAL_MACHINE) is not None:
         # Fresh registration may have completed before a later file/receipt
         # error. Remove its exact fixed identity before Inno removes files.
         helper(root, "remove")
+        retire_system_dll(system_dll())
     journal["status"] = "rolled_back"
     if journal["existing"]:
         write_json(Path(journal["backup"]) / "journal.json", journal)

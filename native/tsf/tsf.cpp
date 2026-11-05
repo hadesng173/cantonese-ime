@@ -442,10 +442,10 @@ HRESULT TextService::ActivateEx(ITfThreadMgr* manager, TfClientId client, DWORD)
     if (manager_) return E_UNEXPECTED;
     candidate_appearance_.Load();
     {
-        // The settings EXE is installed beside this DLL in <root>\native.
+        // The settings EXE is installed beside the product DLL in <root>\native.
         wchar_t module[MAX_PATH]{};
         const DWORD length = GetModuleFileNameW(g_instance, module, MAX_PATH);
-        std::wstring path(module, length < MAX_PATH ? length : 0);
+        std::wstring path = cime::ui::ProductModulePath(std::wstring(module, length < MAX_PATH ? length : 0));
         const auto slash = path.find_last_of(L'\\');
         if (slash != std::wstring::npos) candidate_appearance_.SetSettingsExecutable(path.substr(0, slash + 1) + L"CantoneseImeSettings.exe");
     }
@@ -468,8 +468,14 @@ HRESULT TextService::ActivateEx(ITfThreadMgr* manager, TfClientId client, DWORD)
     if (SUCCEEDED(manager_->QueryInterface(IID_ITfSource, reinterpret_cast<void**>(manager_source_.Put()))))
         manager_source_->AdviseSink(IID_ITfThreadMgrEventSink, static_cast<ITfThreadMgrEventSink*>(this), &manager_cookie_);
     manager_->QueryInterface(IID_ITfUIElementMgr, reinterpret_cast<void**>(ui_manager_.Put()));
+    // A COM-less host thread has no apartment, so ask msctf directly instead
+    // of CoCreateInstance; the latter remains the fallback.
     Ptr<ITfCategoryMgr> categories;
-    if (SUCCEEDED(CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_ITfCategoryMgr, reinterpret_cast<void**>(categories.Put()))))
+    using CreateCategoryMgr = HRESULT (WINAPI*)(ITfCategoryMgr**);
+    const HMODULE msctf = GetModuleHandleW(L"msctf.dll");
+    const auto create = msctf ? reinterpret_cast<CreateCategoryMgr>(reinterpret_cast<void*>(GetProcAddress(msctf, "TF_CreateCategoryMgr"))) : nullptr;
+    if ((create && SUCCEEDED(create(categories.Put()))) ||
+        SUCCEEDED(CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_ITfCategoryMgr, reinterpret_cast<void**>(categories.Put()))))
         categories->RegisterGUID(GUID_CantoneseDisplay, &attribute_);
     return S_OK;
 }

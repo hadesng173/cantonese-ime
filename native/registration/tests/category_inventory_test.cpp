@@ -30,7 +30,11 @@ void Release(const CategoryLinks& links) {
 
 int main() {
     auto expected = Fixture(kCategoryCount);
-    assert(ValidateCategoryLinks(expected) == std::vector<unsigned>({0, 1, 2, 3, 4})); ++checks;
+    assert(ValidateCategoryLinks(expected) == std::vector<unsigned>({0, 1, 2, 3, 4, 5})); ++checks;
+    // A 1.0.8-patched install has five memberships; refresh adds COM-less support.
+    const auto pre_comless = Fixture(5);
+    assert(ValidateCategoryLinks(pre_comless) == std::vector<unsigned>({0, 1, 2, 3, 4})); ++checks;
+    Reject([&] { Release(pre_comless); });
     // A 1.0.8 install has the four pre-immersive memberships; refresh adds the fifth.
     const auto pre_immersive = Fixture(4);
     assert(ValidateCategoryLinks(pre_immersive) == std::vector<unsigned>({0, 1, 2, 3})); ++checks;

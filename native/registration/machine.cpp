@@ -30,8 +30,11 @@ struct Local { void* value = nullptr; ~Local() { if (value) LocalFree(value); } 
 struct Failure { HRESULT result; std::wstring detail; };
 const LANGID kLanguages[] = {0x0409, 0x0c04};
 const GUID* const kCategories[] = {&GUID_TFCAT_TIP_KEYBOARD, &GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER,
-    &GUID_TFCAT_TIPCAP_UIELEMENTENABLED, &GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT, &GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT};
-const wchar_t* const kCategoryNames[] = {L"keyboard", L"display_attribute", L"ui_element", L"system_tray", L"immersive"};
+    &GUID_TFCAT_TIPCAP_UIELEMENTENABLED, &GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT, &GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
+    // Games such as World of Warcraft run their UI thread without COM; TSF
+    // activates only COM-less text services there.
+    &GUID_TFCAT_TIPCAP_COMLESS};
+const wchar_t* const kCategoryNames[] = {L"keyboard", L"display_attribute", L"ui_element", L"system_tray", L"immersive", L"comless"};
 constexpr unsigned kCategoryCount = sizeof(kCategories) / sizeof(kCategories[0]);
 // Modern TSF uses a signed resource location packed in the ULONG argument,
 // matching Microsoft's SampleIME RegisterProfile((UINT)-resourceID) pattern.
@@ -150,7 +153,11 @@ std::wstring FullPath(const std::wstring& path) {
     Require(size && size < result.size(), E_INVALIDARG, L"Invalid absolute path"); result.resize(size);
     Require(Equal(result, path), E_INVALIDARG, L"Paths must already be normalized (no dot segments)"); return result;
 }
-struct Plan { std::wstring source, target, hash, program_files, product_root, relative; };
+// A system plan registers a copy in the System32 directory (games such as World
+// of Warcraft load text-service DLLs only from there) while the product files,
+// including the identical source DLL, stay under Program Files.
+struct Plan { std::wstring source, target, hash, program_files, product_root, relative, system_directory; bool system = false; };
+std::wstring LegacyTarget(const Plan& plan) { return plan.product_root + L"\\native\\CantoneseIME.dll"; }
 std::wstring BrandingPath(const Plan& plan) {
     return plan.product_root + L"\\native\\CantoneseMachineRegistration.exe";
 }
@@ -188,9 +195,14 @@ Plan ReadPlan(const std::wstring& path, const std::wstring& expected_hash) {
     Require(Digest(plan.hash), E_INVALIDARG, L"Invalid DLL digest");
     wchar_t program_files[MAX_PATH]{}; Checked(L"program_files_known_folder", SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILES, nullptr, SHGFP_TYPE_CURRENT, program_files));
     plan.program_files = program_files; plan.product_root = plan.program_files + L"\\CantoneseIME";
+    wchar_t system_directory[MAX_PATH]{}; const UINT system_length = GetSystemDirectoryW(system_directory, MAX_PATH);
+    Require(system_length && system_length < MAX_PATH, WinError(GetLastError()), L"Cannot read the System32 directory");
+    plan.system_directory = system_directory;
     if (Equal(plan.target, plan.product_root + L"\\CantoneseIME.dll")) plan.relative = L"\\CantoneseIME.dll";
-    else if (Equal(plan.target, plan.product_root + L"\\native\\CantoneseIME.dll")) plan.relative = L"\\native\\CantoneseIME.dll";
-    else throw Failure{E_ACCESSDENIED, L"Target must be a fixed CantoneseIME DLL path under the actual 64-bit Program Files known folder"};
+    else if (Equal(plan.target, LegacyTarget(plan))) plan.relative = L"\\native\\CantoneseIME.dll";
+    else if (Equal(plan.target, plan.system_directory + L"\\CantoneseIME.dll") && Equal(plan.source, LegacyTarget(plan))) {
+        plan.system = true; plan.relative = L"\\native\\CantoneseIME.dll";
+    } else throw Failure{E_ACCESSDENIED, L"Target must be a fixed CantoneseIME DLL path under the actual 64-bit Program Files known folder, or its System32 copy"};
     Handle source; OpenRead(plan.source, source); CheckPe(source.value);
     Checked(L"source_dll_sha256", Hash(source.value) == plan.hash ? S_OK : E_ACCESSDENIED, plan.source);
     Log(L"plan_ids", S_OK, Guid(CLSID_CantoneseIME) + L" " + Guid(GUID_CantoneseProfile) + L" languages=0409,0c04");
@@ -246,11 +258,25 @@ std::wstring ReadRegString(HKEY key, const wchar_t* name) {
     std::vector<wchar_t> result(size / sizeof(wchar_t)); error = RegQueryValueExW(key, name, nullptr, &kind, reinterpret_cast<BYTE*>(result.data()), &size);
     Require(!error && result.back() == 0 && std::wcslen(result.data()) == result.size() - 1, error ? WinError(error) : E_ACCESSDENIED, L"Malformed COM registry value"); return result.data();
 }
-void RemovalBinding(const Plan& plan) {
+// Returns the bound DLL path. A system plan also accepts the Program Files
+// binding of an install made before the System32 copy; refresh rebinds it.
+std::wstring RemovalBinding(const Plan& plan) {
     HKEY key = nullptr; LONG error = RegOpenKeyExW(HKEY_LOCAL_MACHINE, (ClassKey() + L"\\InprocServer32").c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &key);
     Checked(L"remove_HKLM_COM_open", WinError(error));
-    try { Require(Equal(ReadRegString(key, nullptr), plan.target) && ReadRegString(key, L"ThreadingModel") == L"Apartment", E_ACCESSDENIED, L"Existing COM DLL/thread model differs from this exact install plan"); } catch (...) { RegCloseKey(key); throw; }
-    RegCloseKey(key); Log(L"remove_exact_binding", S_OK, plan.target);
+    std::wstring bound;
+    try {
+        bound = ReadRegString(key, nullptr);
+        Require((Equal(bound, plan.target) || (plan.system && Equal(bound, LegacyTarget(plan)))) && ReadRegString(key, L"ThreadingModel") == L"Apartment",
+            E_ACCESSDENIED, L"Existing COM DLL/thread model differs from this exact install plan");
+    } catch (...) { RegCloseKey(key); throw; }
+    RegCloseKey(key); Log(L"remove_exact_binding", S_OK, bound); return bound;
+}
+void SetBinding(const std::wstring& path) {
+    HKEY key = nullptr;
+    Checked(L"rebind_HKLM_COM_open", WinError(RegOpenKeyExW(HKEY_LOCAL_MACHINE, (ClassKey() + L"\\InprocServer32").c_str(), 0,
+        KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_WOW64_64KEY, &key)));
+    try { SetString(key, nullptr, path); } catch (...) { RegCloseKey(key); throw; }
+    RegCloseKey(key); Log(L"rebind_HKLM_COM_value", S_OK, path);
 }
 std::vector<std::wstring> Subkeys(HKEY hive, const std::wstring& path) {
     HKEY key = nullptr; const LONG opened = RegOpenKeyExW(hive, path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &key);
@@ -378,7 +404,16 @@ void TargetGuard(const Plan& plan, std::vector<Handle*>& held, Handle& pf, Handl
     const DWORD attrs = GetFileAttributesW(plan.target.c_str());
     Require(attrs != INVALID_FILE_ATTRIBUTES && !(attrs & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)), E_ACCESSDENIED, L"Target DLL must be an existing regular file");
     OpenRead(plan.target, dll); held.push_back(&dll);
-    Require(Equal(FinalPath(dll.value), base + L"\\CantoneseIME" + plan.relative), E_ACCESSDENIED, L"DLL resolves outside fixed protected path");
+    if (plan.system) {
+        // The System32 copy must be the exact bytes of the protected product DLL,
+        // which still anchors the product folder for fonts and settings.
+        Handle system; OpenRead(plan.system_directory, system, true);
+        Require(Equal(FinalPath(dll.value), FinalPath(system.value) + L"\\CantoneseIME.dll"), E_ACCESSDENIED, L"System DLL resolves outside the System32 directory");
+        Handle product; OpenRead(LegacyTarget(plan), product);
+        Require(Equal(FinalPath(product.value), base + L"\\CantoneseIME" + plan.relative), E_ACCESSDENIED, L"Product DLL resolves outside fixed protected path");
+        ProtectedAcl(product.value, LegacyTarget(plan)); CheckPe(product.value);
+        Checked(L"protected_product_dll_sha256", Hash(product.value) == plan.hash ? S_OK : E_ACCESSDENIED, plan.hash);
+    } else Require(Equal(FinalPath(dll.value), base + L"\\CantoneseIME" + plan.relative), E_ACCESSDENIED, L"DLL resolves outside fixed protected path");
     ProtectedAcl(dll.value, plan.target); CheckPe(dll.value); Checked(L"protected_target_dll_sha256", Hash(dll.value) == plan.hash ? S_OK : E_ACCESSDENIED, plan.hash);
 }
 // This resource container is deliberately separate from the COM service DLL:
@@ -552,6 +587,8 @@ int RefreshRegistration(const Plan& plan, ITfInputProcessorProfileMgr* profiles,
         KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_WOW64_64KEY, &key)));
     struct KeyCleanup { HKEY value; ~KeyCleanup() { RegCloseKey(value); } } close{key};
     const std::wstring old_name = ReadRegString(key, nullptr);
+    const std::wstring old_binding = RemovalBinding(plan);
+    bool rebound = false;
     std::vector<unsigned> added_categories;
     unsigned attempted_profiles = 0;
     try {
@@ -566,10 +603,14 @@ int RefreshRegistration(const Plan& plan, ITfInputProcessorProfileMgr* profiles,
             Checked(L"refresh_RegisterCategory_" + std::wstring(kCategoryNames[index]), categories->RegisterCategory(
                 CLSID_CantoneseIME, *kCategories[index], CLSID_CantoneseIME));
         }
+        if (!Equal(old_binding, plan.target)) { rebound = true; SetBinding(plan.target); }
         SetString(key, nullptr, kProductName);
         VerifyRefreshedRegistration(plan);
     } catch (...) {
         bool restored = true;
+        if (rebound) {
+            try { SetBinding(old_binding); } catch (...) { restored = false; Log(L"refresh_rollback_binding", E_FAIL, old_binding); }
+        }
         for (unsigned i = 0; i < attempted_profiles; ++i) {
             const auto& prior = metadata[i];
             const HRESULT result = profiles->RegisterProfile(CLSID_CantoneseIME, prior.language, GUID_CantoneseProfile,
